@@ -3,17 +3,18 @@ import numpy as np
 from dm_control import suite
 from gymnasium import spaces
 from dm_control import viewer
-
 class DMControlWrapper(gym.Env):
-    def __init__(self, domain_name, task_name):
+    def __init__(self, domain_name, task_name, seed):
         super().__init__()
         # Load the given domain and task from DM Control Suite
-        self.env = suite.load(domain_name=domain_name, task_name=task_name)
-
+        self.env = suite.load(domain_name=domain_name, task_name=task_name, task_kwargs={'random': seed})
         # Extract the action and observation spec from the environment
+        if seed is not None:
+            self.seed(seed)
+
         action_spec = self.env.action_spec()
         observation_spec = self.env.observation_spec()
-
+        np.random.seed(seed)
         # Define the action_space and observation_space using Gym spaces
         self.action_space = spaces.Box(low=action_spec.minimum, high=action_spec.maximum, dtype=np.float32)
 
@@ -24,7 +25,7 @@ class DMControlWrapper(gym.Env):
     def step(self, action):
         time_step = self.env.step(action)
         observation = self._flatten_observation(time_step.observation)
-        reward = time_step.reward or 0
+        reward = time_step.reward if time_step.reward is not None else 0
         done = time_step.last()
         truncated = False
         info = {}
@@ -42,6 +43,10 @@ class DMControlWrapper(gym.Env):
 
         return initial_observation, info
 
+    @property
+    def physics(self):
+        return self.env.physics
+
     def render(self, mode='human'):
         if mode == 'human':
             viewer.launch(self.env)
@@ -58,12 +63,11 @@ class DMControlWrapper(gym.Env):
         return flat_obs.astype(np.float32) # Cast to float32
 
     def seed(self, seed=None):
-        # DM Control Suite doesn't provide a direct way to set the seed.
-        pass
+        self.env.task.random.seed(seed)
 
 class DMControlWrapperWithForce(DMControlWrapper):
-    def __init__(self, domain_name, task_name, force_magnitude = 10, apply_force_steps=100, *args, **kwargs):
-        super().__init__(self, domain_name, task_name, *args, **kwargs)
+    def __init__(self, domain_name, task_name, seed, force_magnitude = 80, apply_force_steps=100, *args, **kwargs):
+        super().__init__(domain_name, task_name,seed, *args, **kwargs)
         self.force_magnitude = force_magnitude # The magnitude of the unbalancing force
         self.apply_force_steps = apply_force_steps # Probability of applying the force at each timestep
         self.step_counter = 0
@@ -72,15 +76,15 @@ class DMControlWrapperWithForce(DMControlWrapper):
         "Applies an unbalancing force to the walker randomly in the left or right direction."
         # Randomly choose a direction for the force; for example, left (-1) or right (1) on the x-axis
         body_part = 'torso'
-        body_id = physics.model.body_name2id(body_part)
+        body_id = physics.model.name2id(body_part, 'body')
         # Force is applied in the leftward direction (-ve x-axis)
-        force = np.array([-self.force_magnitude, 0, 0])
-        physics.apply_force(force, body_id, global_coordinate=True)
+        # Force is passed as [x, y, z, torque_x, torque_y, torque_z]
+        force = np.array([0, -self.force_magnitude, 0, 0, 0, 0])
+        #physics.apply_force(force, body_id, global_coordinate=True)
+        physics.data.xfrc_applied[body_id] = force
 
     def step(self, action):
         self.step_counter += 1
-        if self.step_counter % self.apply_force_steps == 0:
-            self.apply_unbalancing_force(self.env.physics)
-        observation, reward, done, info = super().step(action)
-        # Now proceed with the regular step function
-        return observation, reward, done, info
+        # if self.step_counter % self.apply_force_steps == 0:
+        self.apply_unbalancing_force(self.env.physics)
+        return super().step(action)
