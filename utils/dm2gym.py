@@ -47,11 +47,17 @@ class DMControlWrapper(gym.Env):
     def physics(self):
         return self.env.physics
 
-    def render(self, mode='human'):
-        if mode == 'human':
-            viewer.launch(self.env)
+    def render(self, mode='human', width=640, height=480):
+        if mode == 'rgb_array':
+            # Use dm_control's rendering for offscreen rendering
+            return self.env.physics.render(width=width, height=480)
+        elif mode == 'human':
+            # Handle human mode rendering if needed
+            # This might involve on-screen rendering, which dm_control environments handle auto
+            print("Human mode rendering is not directly supported in this wrapper.")
+            # viewer.launch(self.env)
         else:
-            raise NotImplementedError("Only human mode is supported for rendering.")
+            raise NotImplementedError(f"{mode} rendering mode is not supported by this wrapper.")
 
     def close(self):
         # DM Control environments do not require explicit closure methods -> safety
@@ -66,7 +72,7 @@ class DMControlWrapper(gym.Env):
         self.env.task.random.seed(seed)
 
 class DMControlWrapperWithForce(DMControlWrapper):
-    def __init__(self, domain_name, task_name, seed, force_magnitude = 80, apply_force_steps=100, *args, **kwargs):
+    def __init__(self, domain_name, task_name, seed, force_magnitude = 50, apply_force_steps=1, *args, **kwargs):
         super().__init__(domain_name, task_name,seed, *args, **kwargs)
         self.force_magnitude = force_magnitude # The magnitude of the unbalancing force
         self.apply_force_steps = apply_force_steps # Probability of applying the force at each timestep
@@ -79,8 +85,8 @@ class DMControlWrapperWithForce(DMControlWrapper):
         body_id = physics.model.name2id(body_part, 'body')
         # Force is applied in the leftward direction (-ve x-axis)
         # Force is passed as [x, y, z, torque_x, torque_y, torque_z]
-        force = np.array([0, -self.force_magnitude, 0, 0, 0, 0])
-        #physics.apply_force(force, body_id, global_coordinate=True)
+        force = np.array([-self.force_magnitude, 0, 0, 0, 0, 0])
+        # physics.apply_force(force, body_id, global_coordinate=True)
         physics.data.xfrc_applied[body_id] = force
 
     def step(self, action):

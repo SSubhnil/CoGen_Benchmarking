@@ -15,17 +15,17 @@ if torch.cuda.is_available():
 
 project_name = "PPO_Walker2d"
 wandb_key = "576d985d69bfd39f567224809a6a3dd329326993"
-mode = "offline" #"offline"
+mode = "disabled" #"offline"
 domain_name = "walker"
 task_name = "walk"
-total_timesteps = 20000
+total_timesteps =
 
 t_logger = logger.TrainingLogger(my_project_name=domain_name, task_name=task_name,
                                  my_wandb_username=wandb_key, log_mode=mode)
 im_logger = logger.ImageLogger(my_project_name=domain_name, task_name=task_name,
                                my_wandb_username=wandb_key, log_mode=mode)
 
-env = dm2gym.DMControlWrapperWithForce(domain_name=domain_name, task_name=task_name, seed=SEED, force_magnitude=40)
+env = dm2gym.DMControlWrapperWithForce(domain_name=domain_name, task_name=task_name, seed=SEED)
 
 # Check the environment
 check_env(env, warn=True)
@@ -52,7 +52,7 @@ while step_ <= 1000:
     action, _states = model.predict(obs)
     obs, rewards, dones, _, _ = env.step(action)
     t_logger.log_evaluation(rewards, step_, dones)
-    image = im_logger.capture_image(env, mode='human')
+    image = im_logger.capture_image(env, mode='rgb_array')
     im_logger.store_image(image, step_)
     step_ += 1
 im_logger.create_video_and_upload()
