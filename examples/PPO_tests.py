@@ -15,17 +15,18 @@ if torch.cuda.is_available():
 
 project_name = "PPO_Walker2d"
 wandb_key = "576d985d69bfd39f567224809a6a3dd329326993"
-mode = "disabled" #"offline"
+mode = "offline" #"offline"
 domain_name = "walker"
 task_name = "walk"
-total_timesteps =
+wind_type = "swelling" # Can be "step" or "swelling"
+total_timesteps = 20000
 
 t_logger = logger.TrainingLogger(my_project_name=domain_name, task_name=task_name,
                                  my_wandb_username=wandb_key, log_mode=mode)
 im_logger = logger.ImageLogger(my_project_name=domain_name, task_name=task_name,
                                my_wandb_username=wandb_key, log_mode=mode)
 
-env = dm2gym.DMControlWrapperWithForce(domain_name=domain_name, task_name=task_name, seed=SEED)
+env = dm2gym.DMControlWrapperWithForce(domain_name=domain_name, task_name=task_name, seed=SEED, wind_type=wind_type)
 
 # Check the environment
 check_env(env, warn=True)

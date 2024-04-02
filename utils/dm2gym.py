@@ -72,13 +72,23 @@ class DMControlWrapper(gym.Env):
         self.env.task.random.seed(seed)
 
 class DMControlWrapperWithForce(DMControlWrapper):
-    def __init__(self, domain_name, task_name, seed, force_magnitude = 50, apply_force_steps=1, *args, **kwargs):
+    def __init__(self, domain_name, task_name, seed, force_magnitude = 50, wind_probability=0.01, wind_type='step', *args, **kwargs):
         super().__init__(domain_name, task_name,seed, *args, **kwargs)
-        self.force_magnitude = force_magnitude # The magnitude of the unbalancing force
-        self.apply_force_steps = apply_force_steps # Probability of applying the force at each timestep
-        self.step_counter = 0
+        self.force_magnitude = force_magnitude  # The magnitude of the unbalancing force
+        self.wind_probability = wind_probability  # Probability of applying the force at each timestep
+        self.wind_type = wind_type  # New argument to choose the wind type
+        self.wind_active = False
+        self.wind_duration = 0
+        self.wind_step = 0
+        self.max_wind_duration = 50  # Adjust as needed
 
-    def apply_unbalancing_force(self, physics):
+    def start_wind(self):
+        self.wind_active = True
+        self.wind_duration = np.random.randint(20, self.max_wind_duration)  # Random wind duration
+        self.wind_step = 0
+        self.wind_peak_step = self.wind_duration // 2  # Peak force is at the middle
+
+    def apply_step_wind_force(self, physics):
         "Applies an unbalancing force to the walker randomly in the left or right direction."
         # Randomly choose a direction for the force; for example, left (-1) or right (1) on the x-axis
         body_part = 'torso'
@@ -89,8 +99,30 @@ class DMControlWrapperWithForce(DMControlWrapper):
         # physics.apply_force(force, body_id, global_coordinate=True)
         physics.data.xfrc_applied[body_id] = force
 
+    def apply_swelling_wind_force(self, physics):
+        # Apply a force following a normal distributio centered at wind_peak_step
+        magnitude_factor = np.exp(-((self.wind_step - self.wind_peak_step) ** 2) / (2 * (self.wind_peak_step /3) ** 2))
+        force_magnitude = self.force_magnitude * magnitude_factor
+        force = np.array([-force_magnitude, 0, 0, 0, 0, 0])
+        body_part = 'torso'
+        body_id = physics.model.name2id(body_part, 'body')
+        physics.data.xfrc_applied[body_id] = force
+
     def step(self, action):
-        self.step_counter += 1
-        # if self.step_counter % self.apply_force_steps == 0:
-        self.apply_unbalancing_force(self.env.physics)
+        if self.wind_type == 'swelling':
+            # Checks if the wind should start for the swelling wind
+            if not self.wind_active and np.random.rand() < self.wind_probability:
+                self.start_wind()
+
+            if self.wind_active:
+                self.apply_swelling_wind_force(self.env.physics)
+                self.wind_step += 1
+                if self.wind_step >= self.wind_duration:
+                    self.wind_active = False  # Wind ends
+
+        elif self.wind_type == 'step':
+            # Apply step wind logic
+            if np.random.rand() < self.wind_probability:
+                self.apply_step_wind_force(self.env.physics)
+
         return super().step(action)
