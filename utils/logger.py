@@ -8,8 +8,9 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 
 class TrainingLogger:
-    def __init__(self, my_project_name, task_name, my_wandb_username, log_mode, config=None):
+    def __init__(self, my_project_name, domain_name, task_name, my_wandb_username, log_mode, config=None):
         self.project_name = my_project_name
+        self.domain_name = domain_name
         self.task_name = task_name
         wandb.login(key=my_wandb_username)
         wandb.init(project=my_project_name, mode=log_mode)
@@ -42,8 +43,8 @@ class TrainingLogger:
             self.eval_ep_reward = 0
 
 class ImageLogger(TrainingLogger):
-    def __init__(self, my_project_name, task_name, my_wandb_username, log_mode):
-        super().__init__(my_project_name, task_name, my_wandb_username, log_mode, config=None)
+    def __init__(self, my_project_name, domain_name, task_name, my_wandb_username, log_mode):
+        super().__init__(my_project_name, domain_name, task_name, my_wandb_username, log_mode, config=None)
         self.folder_path = os.path.join('results', f'images_{self.project_name}_{self.task_name}')
         os.makedirs(self.folder_path, exist_ok=True)
 
@@ -103,7 +104,7 @@ class ImageLogger(TrainingLogger):
 
         # Specify the path for the output video
         video_path = os.path.join(self.folder_path, "evaluation_video.mp4")
-        imageio.mimsave(video_path, images, fps=fps)
+        imageio.mimsave(video_path, images, format='FFMPEG', fps=fps)
 
         # Upload to WandB
         wandb.log({"evaluation_video": wandb.Video(video_path, fps=fps, format="mp4")})

@@ -1,7 +1,7 @@
 import torch
 
 from utils import dm2gym, logger
-from stable_baselines3 import PPO
+from stable_baselines3 import SAC
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.env_checker import check_env
 import numpy as np
@@ -13,45 +13,47 @@ torch.manual_seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)  # For CUDA support if available
 
-project_name = "PPO_Walker2d"
+project_name = "SAC_Walker2d"
 wandb_key = "576d985d69bfd39f567224809a6a3dd329326993"
 mode = "offline" #"offline"
 domain_name = "walker"
 task_name = "walk"
 wind_type = "swelling" # Can be "step" or "swelling"
-total_timesteps = 1000000
+total_timesteps = 2000000
 
 t_logger = logger.TrainingLogger(my_project_name=project_name, domain_name=domain_name, task_name=task_name,
                                  my_wandb_username=wandb_key, log_mode=mode)
-im_logger = logger.ImageLogger(my_project_name=project_name, domain_name=domain_name, task_name=task_name,
+im_logger = logger.ImageLogger(my_project_name=project_name,domain_name=domain_name, task_name=task_name,
                                my_wandb_username=wandb_key, log_mode=mode)
 
-env = dm2gym.DMControlWrapper(domain_name=domain_name, task_name=task_name, seed=SEED)
+env = dm2gym.DMControlWrapper(domain_name=domain_name, task_name=task_name, seed=SEED) #wind_type=wind_type)
 
 # Check the environment
 check_env(env, warn=True)
-# Wrap the environment in a DummyVecEnv for stable-baselines3
-vec_env = make_vec_env(lambda: env, n_envs=1, seed=SEED)
 
 # Initialize the model
-model = PPO("MlpPolicy", env, seed=SEED, verbose=1,
+model = SAC("MlpPolicy", env, seed=SEED, verbose=1,
             learning_rate=3e-4, #3e-4 default
-            n_steps=2048,
+            buffer_size=1000000,
+            learning_starts=10000,
+            batch_size=256,
+            tau=0.005,
             gamma=0.99,
-            gae_lambda=0.95,
-            ent_coef=0.01,
-            vf_coef=0.5,
-            max_grad_norm=0.5,
-            clip_range=0.2, policy_kwargs={"net_arch":[128, 128]})
+            train_freq=(1, "episode"),
+            gradient_steps=1,
+            ent_coef='auto',
+            target_update_interval=1,
+            use_sde=True,
+            sde_sample_freq=4,
+            policy_kwargs={"net_arch":[256, 256]})
 reward_logging_callback = logger.RewardLoggingCallback(logger=t_logger)
-model.learn(total_timesteps=total_timesteps, callback=reward_logging_callback)
-model.save(domain_name)
+model.learn(total_timesteps=total_timesteps, log_interval=4, callback=reward_logging_callback)
 
 obs, _ = env.reset(seed=SEED)
 step_ = 0
 while step_ <= 10000:
-    action, _states = model.predict(obs)
-    obs, rewards, dones, _, _ = env.step(action.flatten())
+    action, _states = model.predict(obs, deterministic=True)
+    obs, rewards, dones, _, _ = env.step(action)
     t_logger.log_evaluation(rewards, step_, dones)
     image = im_logger.capture_image(env, mode='rgb_array')
     im_logger.store_image(image, step_)
