@@ -61,7 +61,9 @@ class ImageLogger(TrainingLogger):
         # Handle dm_control environment
         if isinstance(env, Environment):
             if mode == 'rgb_array':
-                return env.physics.render(camera_id=0, width=256, height=256)
+            # Assuming the agent has an attribute 'centre_of_mass' or similar
+            	center_x, center_y = env.physics.names.data.xpos['walker',['x', 'y']]
+                return env.physics.render(camera_id=0, width=256, height=256, lookat=[center_x, center_y, 0])
             else:
                 print("dm_control environment: 'human' mode rendering does not return an image.")
                 return None
