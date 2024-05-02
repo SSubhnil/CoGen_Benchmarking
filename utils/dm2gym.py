@@ -93,9 +93,10 @@ class DMControlWrapperWithForce(DMControlWrapper):
         # Randomly choose a direction for the force; for example, left (-1) or right (1) on the x-axis
         body_part = 'torso'
         body_id = physics.model.name2id(body_part, 'body')
+        direction = np.random.choice([-1, 1])
         # Force is applied in the leftward direction (-ve x-axis)
         # Force is passed as [x, y, z, torque_x, torque_y, torque_z]
-        force = np.array([-self.force_magnitude, 0, 0, 0, 0, 0])
+        force = np.array([direction * self.force_magnitude, 0, 0, 0, 0, 0])
         # physics.apply_force(force, body_id, global_coordinate=True)
         physics.data.xfrc_applied[body_id] = force
 
@@ -103,7 +104,8 @@ class DMControlWrapperWithForce(DMControlWrapper):
         # Apply a force following a normal distributio centered at wind_peak_step
         magnitude_factor = np.exp(-((self.wind_step - self.wind_peak_step) ** 2) / (2 * (self.wind_peak_step /3) ** 2))
         force_magnitude = self.force_magnitude * magnitude_factor
-        force = np.array([-force_magnitude, 0, 0, 0, 0, 0])
+        direction = np.random.choice([-1, 1])
+        force = np.array([direction * force_magnitude, 0, 0, 0, 0, 0])
         body_part = 'torso'
         body_id = physics.model.name2id(body_part, 'body')
         physics.data.xfrc_applied[body_id] = force
