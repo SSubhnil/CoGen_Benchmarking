@@ -7,6 +7,7 @@ import gymnasium as gym
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 
+
 class TrainingLogger:
     def __init__(self, my_project_name, domain_name, task_name, my_wandb_username, log_mode, config=None):
         self.project_name = my_project_name
@@ -19,28 +20,33 @@ class TrainingLogger:
         wandb.define_metric("evaluation/Eval_reward", step_metric="evaluation_step")
         wandb.define_metric("evaluation/Eval_ep_reward", step_metric="evaluation_step")
 
-
     @staticmethod
-    def log_training(reward, step, episodic=False, ep_num=None):
+    def log_training(reward, step, reward_components=None, action=None, episodic=False, ep_num=None):
         """
         :param reward: Log a single reward
         :param step: Step info
         :return: None
         """
+        log_data = {"Step reward": reward}
+
+        if action is not None:
+            log_data["Action"] = action
         if episodic:
-            # Log episodic reward with the episode number
-            wandb.log({"Episodic Reward": reward, "Episode": ep_num}, step=step+1)
-        else:
-            # Log step reward
-            wandb.log({"Step Reward": reward}, step=step+1)
+            log_data.update({"Episodic Reward": reward, "Episode": ep_num})
 
-    def log_evaluation(self, reward, evaluation_step, dones):
+        wandb.log(log_data, step=step + 1)
 
-        wandb.log({"evaluation/Eval_reward": reward, "evaluation_step": evaluation_step})
+    def log_evaluation(self, reward, evaluation_step, dones, reward_components=None, action=None):
+        log_data = {"evaluation/Eval_reward": reward, "Evaluation_step": evaluation_step}
+        if action is not None:
+            log_data["evaluation/Action"] = action
+
+        wandb.log(log_data)
         self.eval_ep_reward += reward
         if dones:
             wandb.log({"evaluation/Eval_ep_reward": self.eval_ep_reward, "evaluation_step": evaluation_step})
             self.eval_ep_reward = 0
+
 
 class ImageLogger(TrainingLogger):
     def __init__(self, my_project_name, domain_name, task_name, my_wandb_username, log_mode):
@@ -50,35 +56,34 @@ class ImageLogger(TrainingLogger):
 
     @staticmethod
     def capture_image(env, mode='rgb_array'):
-        # Checks if the environment is a DummyVecEnv or VecEnv
-        if isinstance(env, DummyVecEnv) or hasattr(env, 'venv'):
-            # Assuming we're interested in the first sub-env for image capture
-            env = env.envs[0]
-        # Directly access unwrapped if it's a gym env
-        # If the env is further wrapped
-        if hasattr(env, 'unwrapped'):
-            env = env.unwrapped
+        # # Checks if the environment is a DummyVecEnv or VecEnv
+        # if isinstance(env, DummyVecEnv) or hasattr(env, 'venv'):
+        #     # Assuming we're interested in the first sub-env for image capture
+        #     env = env.envs[0]
+        # # Directly access unwrapped if it's a gym env
+        # # If the env is further wrapped
+        # if hasattr(env, 'unwrapped'):
+        #     env = env.unwrapped
 
         # Handle dm_control environment
         if isinstance(env, Environment):
             if mode == 'rgb_array':
-            # Assuming the agent has an attribute 'centre_of_mass' or similar
-            	center_x, center_y = env.physics.names.data.xpos['walker',['x', 'y']]
+                # Assuming the agent has an attribute 'centre_of_mass' or similar
+                center_x, center_y = env.physics.names.data.xpos['walker', ['x', 'y']]
                 return env.physics.render(camera_id=0, width=256, height=256, lookat=[center_x, center_y, 0])
             else:
                 print("dm_control environment: 'human' mode rendering does not return an image.")
                 return None
-        # Handle Gymnasium environments
-        elif isinstance(env, gym.Env) or hasattr(env, 'render'):
-            # Use provided mode for Gym environments.
-            try:
-                return env.render(mode=mode)
-            except NotImplementedError:
-                print(f"Gym environment: Rendering mode '{mode}' not supported")
-                return None
+        # # Handle Gymnasium environments
+        # elif isinstance(env, gym.Env) or hasattr(env, 'render'):
+        #     # Use provided mode for Gym environments.
+        #     try:
+        #         return env.render(mode=mode)
+        #     except NotImplementedError:
+        #         print(f"Gym environment: Rendering mode '{mode}' not supported")
+        #         return None
         else:
             raise ValueError("Unsupported environment type")
-
 
     @staticmethod
     def log_image_tensorboard(image, step):
@@ -131,9 +136,9 @@ class RewardLoggingCallback(BaseCallback):
     def _on_rollout_end(self):
         # Called at the end of each episode
         # Log episodic reward
-        self.tlogger.log_training(reward=self.episodic_reward, step=self.num_timesteps, episodic=True, ep_num=self.episode_num)
+        self.tlogger.log_training(reward=self.episodic_reward, step=self.num_timesteps, episodic=True,
+                                  ep_num=self.episode_num)
 
         # reset episodic reward
         self.episodic_reward = 0
         self.episode_num += 1
-

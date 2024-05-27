@@ -2,13 +2,19 @@ import torch
 
 from utils import dm2gym, logger
 from stable_baselines3 import SAC
-from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.env_checker import check_env
 import numpy as np
+import random
+
+# Check for GPU
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 SEED = 42
 
+
 np.random.seed(SEED)
+random.seed(SEED)
 torch.manual_seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)  # For CUDA support if available
@@ -18,7 +24,7 @@ wandb_key = "576d985d69bfd39f567224809a6a3dd329326993"
 mode = "offline" #"offline"
 domain_name = "walker"
 task_name = "walk"
-wind_type = "swelling" # Can be "step" or "swelling"
+wind_type = None # Can be "step" or "swelling" or None
 total_timesteps = 2000000
 
 t_logger = logger.TrainingLogger(my_project_name=project_name, domain_name=domain_name, task_name=task_name,
@@ -26,7 +32,7 @@ t_logger = logger.TrainingLogger(my_project_name=project_name, domain_name=domai
 im_logger = logger.ImageLogger(my_project_name=project_name,domain_name=domain_name, task_name=task_name,
                                my_wandb_username=wandb_key, log_mode=mode)
 
-env = dm2gym.DMControlWrapper(domain_name=domain_name, task_name=task_name, seed=SEED) #wind_type=wind_type)
+env = dm2gym.DMControlWrapper(domain_name=domain_name, task_name=task_name, seed=SEED, wind_type=wind_type)
 
 # Check the environment
 check_env(env, warn=True)
