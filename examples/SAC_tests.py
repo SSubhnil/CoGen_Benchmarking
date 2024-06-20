@@ -38,11 +38,11 @@ env = dm2gym.DMControlWrapper(domain_name=domain_name, task_name=task_name, seed
 check_env(env, warn=True)
 
 # Initialize the model
-model = SAC("MlpPolicy", env, seed=SEED, verbose=1,
+model = SAC("MlpPolicy", env, seed=SEED, verbose=1, device=device,
             learning_rate=3e-4, #3e-4 default
             buffer_size=1000000,
             learning_starts=10000,
-            batch_size=256,
+            batch_size=1024,
             tau=0.005,
             gamma=0.99,
             train_freq=(1, "episode"),
@@ -51,13 +51,14 @@ model = SAC("MlpPolicy", env, seed=SEED, verbose=1,
             target_update_interval=1,
             use_sde=True,
             sde_sample_freq=4,
-            policy_kwargs={"net_arch":[256, 256]})
+            policy_kwargs={"net_arch":[1024, 1024]})
 reward_logging_callback = logger.RewardLoggingCallback(logger=t_logger)
 model.learn(total_timesteps=total_timesteps, log_interval=4, callback=reward_logging_callback)
-
+model.save("SAC-Walker-vanilla")
+model = SAC.load("SAC-Walker-vanilla")
 obs, _ = env.reset(seed=SEED)
 step_ = 0
-while step_ <= 10000:
+while step_ <= 100000:
     action, _states = model.predict(obs, deterministic=True)
     obs, rewards, dones, _, _ = env.step(action)
     t_logger.log_evaluation(rewards, step_, dones)
